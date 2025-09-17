@@ -1,0 +1,88 @@
+#### yolo-world 微调 使用自定义数据集
+
+**1、配置文件修改**
+
+`configs/finetune_coco/yolo_world_v2_l_vlpan_bn_sgd_1e-3_40e_8gpus_finetune_coco.py`
+
+（1）修改参数
+
+yolo-world模型下载地址：https://hf-mirror.com/wondervictor/YOLO-World
+
+```python
+# hyper-parameters
+num_classes = 6  # 修改数据集类别
+num_training_classes = 6 # 修改数据集训练类别
+max_epochs = 30 
+close_mosaic_epochs = 10
+save_epoch_intervals = 5
+text_channels = 512
+neck_embed_channels = [128, 256, _base_.last_stage_out_channels // 2]
+neck_num_heads = [4, 8, _base_.last_stage_out_channels // 2 // 32]
+base_lr = 2e-4
+weight_decay = 0.05
+train_batch_size_per_gpu = 1  
+load_from = 'pretrained_models/yolo_world_v2_s_vlpan_bn_2e-4_80e_8gpus_mask-refine_finetune_coco_ep80-492dc329.pth'  # 下载相应模型，确定模型与配置文件对应
+text_model_name = 'openai/clip-vit-base-patch32'
+persistent_workers = False
+mixup_prob = 0.15
+copypaste_prob = 0.3
+```
+
+（2）修改数据集配置
+
+```python
+coco_train_dataset = dict(
+    _delete_=True,
+    type='MultiModalDataset',
+    dataset=dict(
+        type='YOLOv5CocoDataset',
+        data_root='data/coco', # 替换路径
+        ann_file='annotations/train.json', # 替换路径
+        data_prefix=dict(img='images/train_images/'), # 替换路径
+        filter_cfg=dict(filter_empty_gt=False, min_size=32)),
+    class_text_path='data/coco/class_texts.json', # 替换路径
+    pipeline=train_pipeline)
+```
+
+coco_val_dataset 与 val_evaluator 同理
+
+**2、训练模型**
+
+```shell
+python tools/train.py configs/finetune_coco/yolo_world_v2_s_repair.py --amp
+```
+
+
+
+**问题与解决**
+
+（1）`ModuleNotFoundError: No module named 'yolo_world'`
+
+解决方案：`set PYTHONPATH=[path]\YOLO-World_finetune`
+
+（2）`SyntaxError: cannot assign to None`
+
+报错位置：`..\yolo_world\models\detectors\yolo_world.py", line 61   self.text_feats, None = self.backbone.forward_text(texts)                     ^`
+
+解决方案：将其修改为`self.text_feats, _ = self.backbone.forward_text(texts)`
+
+（1）`TypeError: loss_by_feat() missing 1 required positional argument: 'batch_img_metas'`
+
+报错位置：`..\yolo_world\models\dense_heads\yolo_world_head.py", line 366, in loss    losses = self.loss_by_feat(*loss_inputs)`
+
+解决方案：修改loss()，代码如下
+
+```python
+def loss(self, img_feats: Tuple[Tensor], txt_feats: Tensor,
+            txt_masks: Tensor, batch_data_samples: Union[list, dict]) -> dict:
+        """Perform forward propagation and loss calculation of the detection
+        head on the features of the upstream network."""
+
+        outs = self(img_feats, txt_feats, txt_masks)
+        # Fast version
+        loss_inputs = outs + (txt_masks,batch_data_samples['bboxes_labels'],
+                            batch_data_samples['img_metas'])
+        losses = self.loss_by_feat(*loss_inputs)
+        return losses
+```
+
