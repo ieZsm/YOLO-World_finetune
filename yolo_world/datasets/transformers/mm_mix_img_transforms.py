@@ -910,7 +910,7 @@ class YOLOv5MultiModalMixUp(BaseMultiModalMixImageTransform):
         # Randomly obtain the fusion ratio from the beta distribution,
         # which is around 0.5
         ratio = np.random.beta(self.alpha, self.beta)
-        mixup_img = (ori_img * ratio + retrieve_img * (1 - ratio))
+        mixup_img = (ori_img.astype(np.float32) * ratio + retrieve_img.astype(np.float32) * (1 - ratio))
 
         retrieve_gt_bboxes = retrieve_results['gt_bboxes']
         retrieve_gt_bboxes_labels = retrieve_results['gt_bboxes_labels']

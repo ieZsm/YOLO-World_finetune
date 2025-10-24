@@ -355,16 +355,15 @@ class YOLOWorldHead(YOLOv8Head):
     """YOLO World v8 head."""
 
     def loss(self, img_feats: Tuple[Tensor], txt_feats: Tensor,
-             txt_masks: Tensor, batch_data_samples: Union[list, dict]) -> dict:
+            txt_masks: Tensor, batch_data_samples: Union[list, dict]) -> dict:
         """Perform forward propagation and loss calculation of the detection
         head on the features of the upstream network."""
 
         outs = self(img_feats, txt_feats, txt_masks)
         # Fast version
-        loss_inputs = outs + (batch_data_samples['bboxes_labels'],
-                              batch_data_samples['img_metas'])
+        loss_inputs = outs + (txt_masks,batch_data_samples['bboxes_labels'],
+                            batch_data_samples['img_metas'])
         losses = self.loss_by_feat(*loss_inputs)
-
         return losses
 
     def loss_and_predict(

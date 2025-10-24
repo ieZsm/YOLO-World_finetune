@@ -7,10 +7,20 @@ import os.path as osp
 from mmengine.config import Config, DictAction
 from mmengine.logging import print_log
 from mmengine.runner import Runner
+from mmengine.hooks import Hook
 
 from mmyolo.registry import RUNNERS
 from mmyolo.utils import is_metainfo_lower
 
+import torch 
+
+# ---------------- 添加：定义一个释放显存的 Hook ----------------
+class CudaCacheHook(Hook):
+    def after_val_epoch(self, runner, metrics=None):
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+        runner.logger.info(">>> CUDA cache cleared after validation")
+# ----------------------------------------------------------------
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -111,6 +121,21 @@ def main():
         # build customized runner from the registry
         # if 'runner_type' is set in the cfg
         runner = RUNNERS.build(cfg)
+
+    print("="*50)
+    print("CUDA Available:", torch.cuda.is_available())
+    if torch.cuda.is_available():
+        print("CUDA Device Count:", torch.cuda.device_count())
+        print("Current Device:", torch.cuda.current_device())
+        print("Device Name:", torch.cuda.get_device_name(torch.cuda.current_device()))
+        print("Model device:", next(runner.model.parameters()).device)
+    else:
+        print(">>> WARNING: CUDA 不可用！")
+    print("="*50)
+
+    # ---------------- 添加：注册显存清理 Hook ----------------
+    runner.register_hook(CudaCacheHook())
+    # ------------------------------------------------------
 
     # start training
     runner.train()

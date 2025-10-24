@@ -68,6 +68,7 @@ class MultiModalDataset:
             data_info.update({'texts': self.class_texts})
         return data_info
 
+    # xxxx
     def __getitem__(self, idx):
         if not self._fully_initialized:
             print_log(
